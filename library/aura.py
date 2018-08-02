@@ -199,22 +199,29 @@ class Aura(object):
                                for package in packages
                                if self._needs_installation(package, state))
         for package in packages_to_install:
-            params = "--aursync --builduser=%s %s" % (builduser, package)
-
-            if buildpath is not None:
-                params += " --build=%s" % buildpath
-
-            if delmakedeps:
-                params += " --delmakedeps"
-
-            command = "%s %s --noconfirm" % (self._aura_path, params)
+            # Try to install from pacman repositories
+            command = "pacman -Sy %s --noconfirm --noprogressbar --needed" % package
             rc, _, _ = self._module.run_command(command, check_rc=False)
+            if rc == 0:
+                successful_installs += 1
+            # Install from AUR if pacman install fail
+            else:
+                params = "--aursync --builduser=%s %s" % (builduser, package)
 
-            if rc != 0:
-                self._module.fail_json(
-                    msg="Failed to install package '%s'." % package)
+                if buildpath is not None:
+                    params += " --build=%s" % buildpath
 
-            successful_installs += 1
+                if delmakedeps:
+                    params += " --delmakedeps"
+
+                command = "%s %s --noconfirm" % (self._aura_path, params)
+                rc, _, _ = self._module.run_command(command, check_rc=False)
+
+                if rc != 0:
+                    self._module.fail_json(
+                        msg="Failed to install package '%s'." % package)
+
+                successful_installs += 1
 
         if successful_installs > 0:
             self._module.exit_json(
