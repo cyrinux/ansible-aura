@@ -6,7 +6,7 @@ import re
 
 from ansible.module_utils.basic import AnsibleModule
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: aura
 short_description: Manage packages with I(aura)
@@ -61,9 +61,9 @@ options:
         required: false
         default: no
         choices: ['yes', 'no']
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 # Install package foo
 - aura: name=foo state=present
 
@@ -73,50 +73,55 @@ EXAMPLES = '''
 # Run the equivalent of "aura -Au" as a separate step
 - aura: upgrade=yes
 
-'''
+"""
 
-ANSI_ESCAPE_PATTERN = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
+ANSI_ESCAPE_PATTERN = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]")
+
 
 def main():
     module = AnsibleModule(
-        argument_spec   = dict(
-            name        = dict(aliases=['pkg', 'package'], type='list'),
-            state       = dict(default='present', choices=['present', 'installed', 'latest']),
-            upgrade     = dict(aliases=['sysupgrade'], default=False, type='bool'),
-            buildpath   = dict(aliases=['build', 'buildpath'], type='path'),
-            builduser   = dict(aliases=['builduser'], default='nobody'),
-            delmakedeps = dict(default=False, type='bool')),
-        required_one_of=[['name', 'upgrade']],
-        supports_check_mode=True)
+        argument_spec=dict(
+            name=dict(aliases=["pkg", "package"], type="list"),
+            state=dict(default="present", choices=["present", "installed", "latest"]),
+            upgrade=dict(aliases=["sysupgrade"], default=False, type="bool"),
+            buildpath=dict(aliases=["build", "buildpath"], type="path"),
+            builduser=dict(aliases=["builduser"], default="nobody"),
+            delmakedeps=dict(default=False, type="bool"),
+        ),
+        required_one_of=[["name", "upgrade"]],
+        supports_check_mode=True,
+    )
 
-    aura_path = module.get_bin_path('aura', required=True)
+    aura_path = module.get_bin_path("aura", required=True)
 
     aura = Aura(module, aura_path)
 
     params = module.params
 
     # normalize the state parameter
-    if params['state'] in ['present', 'installed']:
-        params['state'] = 'present'
+    if params["state"] in ["present", "installed"]:
+        params["state"] = "present"
 
-    if params['upgrade']:
+    if params["upgrade"]:
         if module.check_mode:
             aura.check_upgrade()
-        aura.upgrade(buildpath=params['buildpath'],
-                     builduser=params['builduser'])
+        aura.upgrade(buildpath=params["buildpath"], builduser=params["builduser"])
 
-    if params['name']:
-        packages = params['name']
+    if params["name"]:
+        packages = params["name"]
 
         if module.check_mode:
-            aura.check_packages(packages, params['state'])
+            aura.check_packages(packages, params["state"])
 
-        if params['state'] in ['present', 'latest']:
-            aura.install_packages(packages=packages,
-                                  state=params['state'],
-                                  buildpath=params['buildpath'],
-                                  builduser=params['builduser'],
-                                  delmakedeps=params['delmakedeps'])
+        if params["state"] in ["present", "latest"]:
+            aura.install_packages(
+                packages=packages,
+                state=params["state"],
+                buildpath=params["buildpath"],
+                builduser=params["builduser"],
+                delmakedeps=params["delmakedeps"],
+            )
+
 
 class Aura(object):
     """A class used to execute Aura commands."""
@@ -130,7 +135,6 @@ class Aura(object):
         self._module = module
         self._aura_path = aura_path
 
-
     def upgrade(self, buildpath, builduser):
         """
         Upgrade all AUR packages on the system.
@@ -139,30 +143,34 @@ class Aura(object):
         """
         packages_to_upgrade = self._packages_to_upgrade()
 
-        upgrade_command = "%s --aursync --builduser=%s --sysupgrade --noconfirm" % (self._aura_path, builduser)
+        upgrade_command = "%s --aursync --builduser=%s --sysupgrade --noconfirm" % (
+            self._aura_path,
+            builduser,
+        )
         if buildpath is not None:
             upgrade_command += " --buildpath=%s" % buildpath
         rc, _, _ = self._module.run_command(upgrade_command, check_rc=False)
         if rc == 0:
             self._module.exit_json(
-                changed=True,
-                msg="%d AUR packages upgraded." % len(packages_to_upgrade))
+                changed=True, msg="%d AUR packages upgraded." % len(packages_to_upgrade)
+            )
         else:
-            self._module.fail_json(
-                changed=False,
-                msg="Could not upgrade AUR packages.")
+            self._module.fail_json(changed=False, msg="Could not upgrade AUR packages.")
 
     def check_upgrade(self):
         packages_to_upgrade = self._packages_to_upgrade()
         if packages_to_upgrade:
             self._module.exit_json(
                 changed=True,
-                msg=("%d AUR package(s) would have beeen upgraded" %
-                     len(packages_to_upgrade)))
+                msg=(
+                    "%d AUR package(s) would have beeen upgraded"
+                    % len(packages_to_upgrade)
+                ),
+            )
         else:
             self._module.exit_json(
-                changed=False,
-                msg="No AURA packages would have been upgraded")
+                changed=False, msg="No AURA packages would have been upgraded"
+            )
 
     def _packages_to_upgrade(self):
         """
@@ -170,23 +178,21 @@ class Aura(object):
         :rtype: list[str]
         """
         dry_upgrade_command = "%s -A --sysupgrade --dryrun" % self._aura_path
-        rc, stdout, _ = self._module.run_command(dry_upgrade_command,
-                                                 check_rc=False)
+        rc, stdout, _ = self._module.run_command(dry_upgrade_command, check_rc=False)
         if rc == 0:
-            colourless_stdout = re.sub(ANSI_ESCAPE_PATTERN, '', stdout)
-            data = colourless_stdout.split('\n')
-            packages = list(itertools.takewhile(
-                lambda line: line,
-                itertools.dropwhile(
-                    lambda line: line.startswith('aura >>='), data)))
+            colourless_stdout = re.sub(ANSI_ESCAPE_PATTERN, "", stdout)
+            data = colourless_stdout.split("\n")
+            packages = list(
+                itertools.takewhile(
+                    lambda line: line,
+                    itertools.dropwhile(lambda line: line.startswith("aura >>="), data),
+                )
+            )
         else:
             packages = []
         return packages
 
-
-    def install_packages(self, packages, state,
-                         buildpath, builduser,
-                         delmakedeps):
+    def install_packages(self, packages, state, buildpath, builduser, delmakedeps):
         """
         :type packages: list[str]
         :type state: str
@@ -195,18 +201,21 @@ class Aura(object):
         :type delmakedeps: bool
         """
         successful_installs = 0
-        packages_to_install = (package
-                               for package in packages
-                               if self._needs_installation(package, state))
+        packages_to_install = (
+            package for package in packages if self._needs_installation(package, state)
+        )
         for package in packages_to_install:
             # Try to install from pacman repositories
-            command = "pacman -Sy %s --noconfirm --noprogressbar --needed" % package
+            command = "aura -Sy %s --noconfirm" % package
             rc, _, _ = self._module.run_command(command, check_rc=False)
             if rc == 0:
                 successful_installs += 1
             # Install from AUR if pacman install fail
             else:
-                params = "--aursync --builduser=%s %s" % (builduser, package)
+                params = "--aursync --builduser=%s --noanalyse %s" % (
+                    builduser,
+                    package,
+                )
 
                 if buildpath is not None:
                     params += " --build=%s" % buildpath
@@ -219,31 +228,35 @@ class Aura(object):
 
                 if rc != 0:
                     self._module.fail_json(
-                        msg="Failed to install package '%s'." % package)
+                        msg="Failed to install package '%s'." % package
+                    )
 
                 successful_installs += 1
 
         if successful_installs > 0:
             self._module.exit_json(
-                changed=True,
-                msg="Installed %d package(s)." % successful_installs)
+                changed=True, msg="Installed %d package(s)." % successful_installs
+            )
 
-        self._module.exit_json(changed=False,
-                               msg="All packages already installed.")
+        self._module.exit_json(changed=False, msg="All packages already installed.")
 
     def check_packages(self, packages, state):
-        num_changed = len([package
-                           for package in packages
-                           if self._needs_installation(package, state)])
+        num_changed = len(
+            [
+                package
+                for package in packages
+                if self._needs_installation(package, state)
+            ]
+        )
         if num_changed:
             self._module.exit_json(
                 changed=True,
-                msg="%d packages would be changed to %s" % (num_changed,
-                                                            state))
+                msg="%d packages would be changed to %s" % (num_changed, state),
+            )
         else:
             self._module.exit_json(
-                changed=False,
-                msg="%d packages are already %s" % (num_changed, state))
+                changed=False, msg="%d packages are already %s" % (num_changed, state)
+            )
 
     def _needs_installation(self, name, state):
         """Determines whether we need to install the package
@@ -256,16 +269,14 @@ class Aura(object):
         local_info = self._query_installation_info(name)
         if not local_info:
             return True
-        elif state == 'present':
+        elif state == "present":
             return False
         else:
             aur_info = self._query_aura_info(name)
             if not aur_info:
-                self._module.fail_json(
-                    msg="No package '%s' found on AUR." % name)
+                self._module.fail_json(msg="No package '%s' found on AUR." % name)
 
-        return local_info['Version'] != aur_info['Version']
-
+        return local_info["Version"] != aur_info["Version"]
 
     def _query_installation_info(self, name):
         """Queries the local installation.
@@ -302,14 +313,15 @@ class Aura(object):
         :returns: A dictionary containing the information needed.
         :rtype: dict[str, str]
         """
-        colourless_info = re.sub(ANSI_ESCAPE_PATTERN, '', info)
-        lines = colourless_info.split('\n')
+        colourless_info = re.sub(ANSI_ESCAPE_PATTERN, "", info)
+        lines = colourless_info.split("\n")
         info_dict = {}
         for line in lines:
             if line:
-                key, value = line.split(':', 1)
+                key, value = line.split(":", 1)
                 info_dict[key.strip()] = value.strip()
         return info_dict
+
 
 if __name__ == "__main__":
     main()
